@@ -43,6 +43,15 @@ fi
 ACTIVE_GS=$(node -e "const { createClient } = require('@libsql/client'); async function get() { try { const c = createClient({ url: 'file:$ACTIVE_DB' }); const r = await c.execute(\"SELECT value FROM app_settings WHERE key = 'geoserver_url'\"); console.log(r.rows.length ? r.rows[0].value : 'http://localhost:8080/geoserver'); } catch(e) { console.log('http://localhost:8080/geoserver'); } } get();" 2>/dev/null)
 [ -z "$ACTIVE_GS" ] && ACTIVE_GS="http://localhost:8080/geoserver"
 
+# Read configured port from SQLite (default 3000)
+APP_PORT=$(node -e "const { createClient } = require('@libsql/client'); async function get() { try { const c = createClient({ url: 'file:$ACTIVE_DB' }); const r = await c.execute(\"SELECT value FROM app_settings WHERE key = 'app_port'\"); console.log(r.rows.length ? r.rows[0].value : '3000'); } catch(e) { console.log('3000'); } } get();" 2>/dev/null)
+[ -z "$APP_PORT" ] && APP_PORT="3000"
+
+# Allow PORT env var to override
+if [ -n "${PORT}" ]; then
+    APP_PORT="${PORT}"
+fi
+
 # -------------------------------------------------------------------------
 # 2. VERIFY DEPENDENCIES & PRODUCTION BUILD
 # -------------------------------------------------------------------------
@@ -65,17 +74,32 @@ if [ ! -d ".next" ]; then
 fi
 
 # -------------------------------------------------------------------------
-# 3. CONFIGURE APPLICATION PORT (Default: 3007)
+# 3. CHECK IF PORT IS BUSY
 # -------------------------------------------------------------------------
-APP_PORT="${PORT:-3007}"
-
-PID=$(lsof -ti :$APP_PORT 2>/dev/null)
-if [ -z "$PID" ]; then
-    PID=$(ss -lptn "sport = :$APP_PORT" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | head -n 1)
+PORT_PID=""
+if command -v lsof >/dev/null 2>&1; then
+    PORT_PID=$(lsof -ti :"$APP_PORT" 2>/dev/null)
+elif command -v ss >/dev/null 2>&1; then
+    PORT_PID=$(ss -lptn "sport = :$APP_PORT" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | head -n 1)
 fi
-if [ -n "$PID" ]; then
-    echo "[*] Clearing previous process on port $APP_PORT (PID: $PID)..."
-    kill -9 $PID 2>/dev/null
+
+if [ -n "$PORT_PID" ]; then
+    echo -e "${YELLOW}[WARN] Port $APP_PORT is currently in use (PID: $PORT_PID).${NC}"
+    echo ""
+    echo "  [1] Kill the process and use port $APP_PORT"
+    echo "  [2] Enter a different port for this session"
+    echo ""
+    read -r -p "Your choice (1 or 2): " PORT_CHOICE
+    if [ "$PORT_CHOICE" = "1" ]; then
+        echo "[*] Terminating process on port $APP_PORT (PID: $PORT_PID)..."
+        kill -9 $PORT_PID 2>/dev/null || true
+        echo -e "${GREEN}[OK] Port $APP_PORT is now free.${NC}"
+    else
+        read -r -p "Enter port number: " NEW_PORT
+        if [ -n "$NEW_PORT" ]; then
+            APP_PORT="$NEW_PORT"
+        fi
+    fi
 fi
 
 # -------------------------------------------------------------------------
@@ -94,5 +118,5 @@ echo ""
 echo "Starting production server on port $APP_PORT..."
 echo ""
 
-# Launch Next.js on the unique port
+# Launch Next.js on the configured port
 npx next start -p "$APP_PORT"

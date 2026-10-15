@@ -69,7 +69,60 @@ fi
 FINAL_GS="${FINAL_GS%/}"
 
 # -------------------------------------------------------------------------
-# 3. SAVE CONFIGURATION
+# 3. FRONTEND PORT CONFIGURATION
+# -------------------------------------------------------------------------
+echo ""
+echo "----------------------------------------------------------------------"
+echo " Frontend Port Configuration"
+echo "----------------------------------------------------------------------"
+
+APP_PORT=3000
+
+while true; do
+    read -r -p "Enter frontend port (default $APP_PORT, press ENTER to use default): " USER_PORT
+    if [ -n "$USER_PORT" ]; then
+        # Validate it's a number
+        if ! [[ "$USER_PORT" =~ ^[0-9]+$ ]]; then
+            echo -e "${RED}[ERROR] Invalid port number. Please enter a number between 1024 and 65535.${NC}"
+            continue
+        fi
+        APP_PORT="$USER_PORT"
+    fi
+
+    # Check if port is in use
+    PORT_PID=""
+    if command -v lsof >/dev/null 2>&1; then
+        PORT_PID=$(lsof -ti :"$APP_PORT" 2>/dev/null)
+    elif command -v ss >/dev/null 2>&1; then
+        PORT_PID=$(ss -lptn "sport = :$APP_PORT" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | head -n 1)
+    fi
+
+    if [ -n "$PORT_PID" ]; then
+        echo ""
+        echo -e "${YELLOW}[WARN] Port $APP_PORT is currently in use (PID: $PORT_PID).${NC}"
+        echo ""
+        echo "  [1] Kill the process on port $APP_PORT and use it anyway"
+        echo "  [2] Enter a different port"
+        echo ""
+        read -r -p "Your choice (1 or 2): " PORT_CHOICE
+        if [ "$PORT_CHOICE" = "1" ]; then
+            echo "[*] Terminating process on port $APP_PORT [PID: $PORT_PID]..."
+            kill -9 $PORT_PID 2>/dev/null || true
+            echo -e "${GREEN}[OK] Port $APP_PORT is now free.${NC}"
+            break
+        else
+            APP_PORT=3000
+            continue
+        fi
+    else
+        break
+    fi
+done
+
+echo -e "${GREEN}[OK] Frontend will run on port $APP_PORT.${NC}"
+
+# -------------------------------------------------------------------------
+# 4. SAVE CONFIGURATION
 # -------------------------------------------------------------------------
 echo ""
 echo "[*] Saving configuration..."
@@ -79,13 +132,13 @@ mkdir -p "data"
 # Remove any .env files - project runs 100% from SQLite
 rm -f .env .env.local .env.production >/dev/null 2>&1
 
-node -e "const { createClient } = require('@libsql/client'); const crypto = require('crypto'); async function save() { try { const c = createClient({ url: 'file:data/geovista.db' }); await c.execute('CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);'); await c.execute({ sql: 'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', args: ['geoserver_url', process.argv[1]] }); await c.execute({ sql: 'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING', args: ['tileserv_url', 'http://localhost:7800'] }); const row = await c.execute({ sql: 'SELECT value FROM app_settings WHERE key = ?', args: ['jwt_secret'] }); if (row.rows.length === 0) { const newKey = crypto.randomBytes(64).toString('base64'); await c.execute({ sql: 'INSERT INTO app_settings (key, value) VALUES (?, ?)', args: ['jwt_secret', newKey] }); } } catch(e){ console.error(e); } } save();" "$FINAL_GS" >/dev/null 2>&1
+node -e "const { createClient } = require('@libsql/client'); const crypto = require('crypto'); async function save() { try { const c = createClient({ url: 'file:data/geovista.db' }); await c.execute('CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);'); await c.execute({ sql: 'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', args: ['geoserver_url', process.argv[1]] }); await c.execute({ sql: 'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING', args: ['tileserv_url', 'http://localhost:7800'] }); await c.execute({ sql: 'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', args: ['app_port', process.argv[2]] }); const row = await c.execute({ sql: 'SELECT value FROM app_settings WHERE key = ?', args: ['jwt_secret'] }); if (row.rows.length === 0) { const newKey = crypto.randomBytes(64).toString('base64'); await c.execute({ sql: 'INSERT INTO app_settings (key, value) VALUES (?, ?)', args: ['jwt_secret', newKey] }); } } catch(e){ console.error(e); } } save();" "$FINAL_GS" "$APP_PORT" >/dev/null 2>&1
 
 echo -e "${GREEN}[OK] Configuration saved directly into SQLite database (data/geovista.db)!${NC}"
 echo -e "${GREEN}[OK] Zero .env files created - project runs 100% from SQLite database.${NC}"
 
 # -------------------------------------------------------------------------
-# 4. VERIFY CONNECTION
+# 5. VERIFY CONNECTION
 # -------------------------------------------------------------------------
 echo "[*] Checking GeoServer reachability [$FINAL_GS]..."
 if curl -s -I --max-time 5 "$FINAL_GS/web/" >/dev/null 2>&1; then
@@ -95,23 +148,15 @@ else
 fi
 
 # -------------------------------------------------------------------------
-# 5. CLEAR CACHE & PREVIOUS PROCESSES
+# 6. CLEAR CACHE
 # -------------------------------------------------------------------------
-if command -v lsof >/dev/null 2>&1; then
-    OLD_PID=$(lsof -ti :3000)
-    if [ -n "$OLD_PID" ]; then
-        echo "[*] Terminating previous server process on port 3000 [PID: $OLD_PID]..."
-        kill -9 $OLD_PID 2>/dev/null || true
-    fi
-fi
-
 if [ -d ".next" ]; then
     echo "[*] Clearing Next.js build cache..."
     rm -rf ".next"
 fi
 
 # -------------------------------------------------------------------------
-# 6. COMPILE OPTIMIZED PRODUCTION BUILD
+# 7. COMPILE OPTIMIZED PRODUCTION BUILD
 # -------------------------------------------------------------------------
 echo ""
 echo -e "${CYAN}======================================================================${NC}"
@@ -131,7 +176,7 @@ echo -e "${GREEN}===============================================================
 echo -e "${GREEN}                  SETUP COMPLETED SUCCESSFULLY!                      ${NC}"
 echo -e "${GREEN}======================================================================${NC}"
 echo "Active GeoServer: $FINAL_GS"
-echo "Database File:    $DB_PATH (Isolated for this GeoServer)"
+echo "Frontend Port:    $APP_PORT"
 echo ""
 echo "You can start the application anytime by running:"
 echo "    ./start.sh"
