@@ -24,9 +24,6 @@ jobs:
   code-testing:
     name: "1. Code Quality & Unit Testing"
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: urban-vista-development
 
     steps:
       - name: Checkout Code
@@ -37,7 +34,7 @@ jobs:
         with:
           node-version: 20
           cache: "npm"
-          cache-dependency-path: urban-vista-development/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install Dependencies
         run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
@@ -67,8 +64,8 @@ jobs:
         with:
           name: code-coverage-report
           path: |
-            urban-vista-development/coverage/
-            urban-vista-development/coverage-summary.md
+            coverage/
+            coverage-summary.md
           if-no-files-found: ignore
 
   # ============================================================================
@@ -117,7 +114,7 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: "fs"
-          scan-ref: "urban-vista-development"
+          scan-ref: "."
           format: "table"
           severity: "CRITICAL,HIGH"
           exit-code: "0"
@@ -140,11 +137,10 @@ jobs:
         with:
           node-version: 20
           cache: "npm"
-          cache-dependency-path: urban-vista-development/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Build and Start Local Server for DAST
         if: ${{ github.event.inputs.target_env_url == '' }}
-        working-directory: urban-vista-development
         env:
           NODE_ENV: production
           NEXT_TELEMETRY_DISABLED: 1
@@ -186,9 +182,6 @@ jobs:
     name: "4. User Acceptance Testing (UAT)"
     runs-on: ubuntu-latest
     needs: [dast-security]
-    defaults:
-      run:
-        working-directory: urban-vista-development
 
     steps:
       - name: Checkout Code
@@ -199,7 +192,7 @@ jobs:
         with:
           node-version: 20
           cache: "npm"
-          cache-dependency-path: urban-vista-development/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install Dependencies & Build
         if: ${{ github.event.inputs.target_env_url == '' }}
@@ -234,7 +227,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: uat-acceptance-report
-          path: urban-vista-development/uat-report.md
+          path: uat-report.md
           if-no-files-found: ignore
 
   # ============================================================================
@@ -244,9 +237,6 @@ jobs:
     name: "5. Production Acceptance Testing (PAT)"
     runs-on: ubuntu-latest
     needs: [uat-testing]
-    defaults:
-      run:
-        working-directory: urban-vista-development
 
     steps:
       - name: Checkout Code
@@ -257,7 +247,7 @@ jobs:
         with:
           node-version: 20
           cache: "npm"
-          cache-dependency-path: urban-vista-development/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install Dependencies & Build
         if: ${{ github.event.inputs.target_env_url == '' }}
@@ -292,5 +282,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pat-readiness-report
-          path: urban-vista-development/pat-report.md
+          path: pat-report.md
           if-no-files-found: ignore
+          
