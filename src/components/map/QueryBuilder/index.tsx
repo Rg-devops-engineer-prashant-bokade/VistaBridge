@@ -267,6 +267,7 @@ export default function QueryBuilder({
     slots: LayerActiveFilters,
   ): Promise<string[]> => {
     const hasAttrFilter = !!slots.attribute?.attribute_filters?.length;
+    const hasLayerFilter = !!slots.layer?.layer_filter?.dataset_id;
 
     // Fetch attribute field-type schema only when needed
     const schema: Record<string, string> = {};
@@ -320,6 +321,47 @@ export default function QueryBuilder({
       }
     }
 
+    // ── When a layer filter is present, use the server-side spatial-query endpoint ──
+    // This avoids GeoServer's queryCollection 1000-feature limit by fetching
+    // reference geometries server-side and using WFS POST XML or Turf.js fallback.
+    if (hasLayerFilter) {
+      const lf = slots.layer!.layer_filter!;
+
+      // Build non-layer CQL parts (attribute + buffer + drawn spatial) as attr_ecql
+      const nonLayerSlots: LayerActiveFilters = {};
+      if (slots.attribute) nonLayerSlots.attribute = slots.attribute;
+      if (slots.buffer) nonLayerSlots.buffer = slots.buffer;
+      if (slots.spatial) nonLayerSlots.spatial = slots.spatial;
+      const attrEcql = Object.keys(nonLayerSlots).length > 0
+        ? compileSlotsToCql(nonLayerSlots, schema, geomFieldName, refGeomFieldName, isGeographic, refFilterCql)
+        : '';
+
+      const sqParams = new URLSearchParams({
+        ref_layer_id: lf.dataset_id,
+        operation: (lf.operation || 'INTERSECTS').toUpperCase(),
+        count: '5000',
+      });
+      if (attrEcql) sqParams.set('attr_ecql', attrEcql);
+      if (refFilterCql && refFilterCql !== 'INCLUDE') sqParams.set('ref_cql_filter', refFilterCql);
+
+      const res = await apiRequest(`/datasets/${layerId}/spatial-query/?${sqParams}`);
+      if (!res.ok) {
+        let errMsg = 'Spatial query failed';
+        try { const e = await res.json(); errMsg = e.message || e.detail || errMsg; } catch { /* ignore */ }
+        throw new Error(errMsg);
+      }
+      const data = await res.json();
+      if (data.count > 5000) {
+        notification.warning({
+          message: `Query matched ${data.count} features — showing first 5000`,
+          placement: 'topRight', duration: 4,
+        });
+      }
+      // spatial-query returns { count, data: ['layerName.id', ...] }
+      return (data.data || []).map((f: any) => String(f)).filter(Boolean);
+    }
+
+    // ── Non-layer queries: attribute, buffer, drawn geometry spatial ──
     const cqlFilter = compileSlotsToCql(slots, schema, geomFieldName, refGeomFieldName, isGeographic, refFilterCql);
     if (!cqlFilter) throw new Error('No valid filters configured');
 
@@ -328,20 +370,6 @@ export default function QueryBuilder({
     if (!res.ok) {
       let errMsg = 'Query failed';
       try { const e = await res.json(); errMsg = e.message || e.detail || errMsg; } catch { /* ignore */ }
-      const errLower = errMsg.toLowerCase();
-      if (
-        errLower.includes('querycollection') ||
-        errLower.includes('collectgeometries') ||
-        errLower.includes('function not found') ||
-        errLower.includes('nosuchfunction') ||
-        errLower.includes('function unknown')
-      ) {
-        const pluginErr: any = new Error("The 'querylayer' extension (queryCollection) is not installed or enabled on this GeoServer instance.");
-        pluginErr.isPluginError = true;
-        pluginErr.notificationTitle = 'GeoServer QueryLayer Plugin Required';
-        pluginErr.notificationDescription = "The 'querylayer' extension (queryCollection) is not installed or enabled on this GeoServer instance. Please install the GeoServer QueryLayer plugin to enable cross-layer spatial queries, or use 'Draw / Paste Geometry' mode.";
-        throw pluginErr;
-      }
       throw new Error(errMsg);
     }
     const data = await res.json();
