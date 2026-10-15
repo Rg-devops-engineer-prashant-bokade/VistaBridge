@@ -1,0 +1,219 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: var(--primary-color);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --primary-color: #1677ff;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: #f8fafc;
+}
+
+body {
+  color: var(--foreground);
+}
+
+/* Ant Design style overrides for clean, borderless inputs */
+.vismap-input {
+  background-color: #f1f5f9 !important;
+  border: none !important;
+  padding: 10px 16px !important;
+  border-radius: 12px !important;
+  transition: all 0.2s ease !important;
+}
+
+.ant-input-affix-wrapper.vismap-input {
+  padding: 0 16px !important;
+}
+
+.ant-input-affix-wrapper.vismap-input .ant-input {
+  padding: 10px 0 !important;
+  background-color: transparent !important;
+}
+
+.vismap-input:hover,
+.vismap-input:focus,
+.ant-input-affix-wrapper-focused.vismap-input {
+  background-color: #ffffff !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color, #1677ff) 25%, transparent) !important;
+}
+
+.vismap-btn-primary {
+  height: 48px !important;
+  border-radius: 12px !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color, #1677ff) 25%, transparent) !important;
+}
+
+/* Login Page Sign-In Button: dynamically styled with active primary theme */
+.login-submit-btn,
+.ant-btn.login-submit-btn,
+.ant-btn-primary.login-submit-btn {
+  background-color: var(--primary-color, #0284c7) !important;
+  border-color: var(--primary-color, #0284c7) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--primary-color, #0284c7) 35%, transparent) !important;
+  transition: all 0.2s ease !important;
+}
+
+.login-submit-btn:hover,
+.ant-btn.login-submit-btn:hover,
+.ant-btn-primary.login-submit-btn:hover {
+  filter: brightness(0.92);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--primary-color, #0284c7) 45%, transparent) !important;
+}
+
+.login-submit-btn:active,
+.ant-btn.login-submit-btn:active,
+.ant-btn-primary.login-submit-btn:active {
+  filter: brightness(0.85);
+}
+
+
+
+/* Query Builder - thin scrollbar */
+.query-builder-scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+.query-builder-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.query-builder-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.query-builder-scroll::-webkit-scrollbar-thumb {
+  background-color: #d1d5db;
+  border-radius: 9999px;
+}
+
+/* Query Builder section accent borders */
+.qb-section-buffer {
+  border-left: 3px solid #6818d2;
+}
+
+.qb-section-attribute {
+  border-left: 3px solid #6818d2;
+}
+
+.qb-section-spatial {
+  border-left: 3px solid #6818d2;
+}
+
+/* Active pill dot pulse */
+@keyframes qb-pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.qb-dot-active {
+  animation: qb-pulse 1.2s ease-in-out infinite;
+}
+
+html.dashboard-exporting,
+html.dashboard-exporting body {
+  cursor: default !important;
+}
+
+html.dashboard-exporting #dashboard-canvas,
+html.dashboard-exporting #dashboard-canvas * {
+  pointer-events: none !important;
+}
+
+html.dashboard-exporting .ant-tooltip,
+html.dashboard-exporting .echarts-tooltip {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Layer List Scrollbar - always visible & thin styling */
+.layer-list-scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.layer-list-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.layer-list-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.layer-list-scroll::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 9999px;
+}
+
+/* Global override: disable all tooltips on mobile/tablet viewports */
+@media (max-width: 767px) {
+  .ant-tooltip {
+    display: none !important;
+    pointer-events: none !important;
+  }
+}
+
+/* React Grid Layout Drag Placeholder styling */
+.react-grid-placeholder {
+  background: rgba(99, 102, 241, 0.12) !important;
+  border: 2px dashed #6366f1 !important;
+  border-radius: 1rem !important;
+  opacity: 0.75 !important;
+  transition: none !important;
+  z-index: 1 !important;
+  pointer-events: none !important;
+}
+
+/* Hide any orphaned or lingering placeholder when not dragging */
+body:not(.is-dragging-widget) .react-grid-placeholder {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* While dragging, prevent charts, maps, and canvas elements from stealing pointer events */
+body.is-dragging-widget,
+body.is-dragging-widget * {
+  user-select: none !important;
+}
+
+body.is-dragging-widget .dashboard-widget-content,
+body.is-dragging-widget .ol-viewport,
+body.is-dragging-widget canvas,
+body.is-dragging-widget svg {
+  pointer-events: none !important;
+  user-select: none !important;
+}
+
+.react-grid-item.react-draggable-dragging {
+  z-index: 100 !important;
+  opacity: 0.92 !important;
+}
+
+.react-grid-item.resizing {
+  z-index: 100 !important;
+}

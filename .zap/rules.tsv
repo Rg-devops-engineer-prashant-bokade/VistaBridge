@@ -1,0 +1,6 @@
+# OWASP ZAP Rules Configuration
+# Format: <rule-id>\t<threshold>\t<regex>
+# Thresholds: IGNORE, INFO, LOW, MEDIUM, HIGH
+# Example:
+# 10015	IGNORE	(Incomplete or No Matching CSP)
+

@@ -1,0 +1,296 @@
+name: "CI/CD: Code Testing, SAST, DAST, UAT & PAT Pipeline"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      target_env_url:
+        description: "Target URL for DAST/UAT/PAT (leave blank to run against local production build)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  # ============================================================================
+  # 1. CODE TESTING & QUALITY CHECK
+  # ============================================================================
+  code-testing:
+    name: "1. Code Quality & Unit Testing"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: urban-vista-development
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: urban-vista-development/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+
+      - name: Dependency Vulnerability Audit
+        run: npm audit --audit-level=critical || true
+
+      - name: Code Linting (ESLint)
+        run: npm run lint
+
+      - name: TypeScript Type Check
+        run: npx tsc --noEmit
+
+      - name: Run Unit Tests with Code Coverage
+        run: npm run test:coverage
+
+      - name: Publish Coverage Summary to GitHub Actions
+        if: always()
+        run: |
+          if [ -f coverage-summary.md ]; then
+            cat coverage-summary.md >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload HTML & LCOV Coverage Report Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-coverage-report
+          path: |
+            urban-vista-development/coverage/
+            urban-vista-development/coverage-summary.md
+          if-no-files-found: ignore
+
+  # ============================================================================
+  # 2. SAST (STATIC APPLICATION SECURITY TESTING)
+  # ============================================================================
+  sast-security:
+    name: "2. SAST Security Analysis"
+    runs-on: ubuntu-latest
+    needs: [code-testing]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 2.1 Secret Scanning (Gitleaks)
+      - name: Secret Leak Detection (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      # 2.2 Semgrep SAST Analysis (OWASP Top 10 & CWE Rules)
+      - name: Semgrep SAST Scan
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/owasp-top-ten
+            p/javascript
+            p/typescript
+          generateSarif: "semgrep.sarif"
+        continue-on-error: true
+
+      # 2.3 Upload SARIF to GitHub Security Tab
+      - name: Upload Semgrep SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+        continue-on-error: true
+
+      # 2.4 Trivy Filesystem & Dependency Vulnerability Scan
+      - name: Trivy Dependency & Misconfiguration Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: "urban-vista-development"
+          format: "table"
+          severity: "CRITICAL,HIGH"
+          exit-code: "0"
+
+  # ============================================================================
+  # 3. DAST (DYNAMIC APPLICATION SECURITY TESTING)
+  # ============================================================================
+  dast-security:
+    name: "3. DAST Dynamic Security Scan (OWASP ZAP)"
+    runs-on: ubuntu-latest
+    needs: [sast-security]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        if: ${{ github.event.inputs.target_env_url == '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: urban-vista-development/package-lock.json
+
+      - name: Build and Start Local Server for DAST
+        if: ${{ github.event.inputs.target_env_url == '' }}
+        working-directory: urban-vista-development
+        env:
+          NODE_ENV: production
+          NEXT_TELEMETRY_DISABLED: 1
+          PORT: 3000
+        run: |
+          npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+          npm run build
+          # Start app in background
+          npx next start -p 3000 &
+          echo "Waiting for Next.js application to be ready..."
+          timeout 60 bash -c 'until curl -s http://localhost:3000 > /dev/null; do sleep 2; done'
+          echo "Application is up on http://localhost:3000"
+
+      - name: Run OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: ${{ github.event.inputs.target_env_url || 'http://localhost:3000' }}
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a'
+          allow_issue_writing: false
+          artifact_name: 'zap-dast-report'
+        continue-on-error: true
+
+      - name: Upload ZAP DAST Report Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: owasp-zap-dast-report
+          path: |
+            report_html.html
+            report_md.md
+            report_json.json
+          if-no-files-found: ignore
+
+  # ============================================================================
+  # 4. UAT (USER ACCEPTANCE TESTING)
+  # ============================================================================
+  uat-testing:
+    name: "4. User Acceptance Testing (UAT)"
+    runs-on: ubuntu-latest
+    needs: [dast-security]
+    defaults:
+      run:
+        working-directory: urban-vista-development
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: urban-vista-development/package-lock.json
+
+      - name: Install Dependencies & Build
+        if: ${{ github.event.inputs.target_env_url == '' }}
+        run: |
+          npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+          npm run build
+
+      - name: Start Production Instance for UAT
+        if: ${{ github.event.inputs.target_env_url == '' }}
+        env:
+          NODE_ENV: production
+          NEXT_TELEMETRY_DISABLED: 1
+          PORT: 3000
+        run: |
+          npx next start -p 3000 &
+          timeout 60 bash -c 'until curl -s http://localhost:3000 > /dev/null; do sleep 2; done'
+
+      - name: Execute UAT Test Suite
+        env:
+          TEST_BASE_URL: ${{ github.event.inputs.target_env_url || 'http://localhost:3000' }}
+        run: node scripts/uat-tests.mjs
+
+      - name: Append UAT Report to GitHub Summary
+        if: always()
+        run: |
+          if [ -f uat-report.md ]; then
+            cat uat-report.md >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload UAT Report Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uat-acceptance-report
+          path: urban-vista-development/uat-report.md
+          if-no-files-found: ignore
+
+  # ============================================================================
+  # 5. PAT (PRODUCTION ACCEPTANCE TESTING)
+  # ============================================================================
+  pat-testing:
+    name: "5. Production Acceptance Testing (PAT)"
+    runs-on: ubuntu-latest
+    needs: [uat-testing]
+    defaults:
+      run:
+        working-directory: urban-vista-development
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: urban-vista-development/package-lock.json
+
+      - name: Install Dependencies & Build
+        if: ${{ github.event.inputs.target_env_url == '' }}
+        run: |
+          npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+          npm run build
+
+      - name: Start Production Instance for PAT
+        if: ${{ github.event.inputs.target_env_url == '' }}
+        env:
+          NODE_ENV: production
+          NEXT_TELEMETRY_DISABLED: 1
+          PORT: 3000
+        run: |
+          npx next start -p 3000 &
+          timeout 60 bash -c 'until curl -s http://localhost:3000 > /dev/null; do sleep 2; done'
+
+      - name: Execute PAT Readiness Test Suite
+        env:
+          TEST_BASE_URL: ${{ github.event.inputs.target_env_url || 'http://localhost:3000' }}
+        run: node scripts/pat-tests.mjs
+
+      - name: Append PAT Report to GitHub Summary
+        if: always()
+        run: |
+          if [ -f pat-report.md ]; then
+            cat pat-report.md >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload PAT Readiness Report Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pat-readiness-report
+          path: urban-vista-development/pat-report.md
+          if-no-files-found: ignore

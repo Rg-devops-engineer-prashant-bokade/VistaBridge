@@ -1,0 +1,42 @@
+[
+  {
+    "id": "none",
+    "name": "No Basemap",
+    "desc": "Blank canvas with no background map",
+    "thumbnail": "",
+    "url": "",
+    "attributions": ""
+  },
+  {
+    "id": "osm",
+    "name": "OSM",
+    "desc": "OpenStreetMap standard map",
+    "thumbnail": "https://a.tile.openstreetmap.org/0/0/0.png",
+    "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    "attributions": "Map data &copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors"
+  },
+  {
+    "id": "esri",
+    "name": "ESRI World Imagery",
+    "desc": "Satellite imagery from Esri",
+    "thumbnail": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/0/0/0",
+    "url": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    "attributions": "Tiles &copy; Esri"
+  },
+  {
+    "id": "google_hybrid",
+    "name": "Google Hybrid",
+    "desc": "Google satellite with road overlays",
+    "thumbnail": "https://mt1.google.com/vt/lyrs=y&x=0&y=0&z=0",
+    "url": "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+    "attributions": "Map data &copy; Google"
+  },
+  {
+    "id": "google_street",
+    "name": "Google Street",
+    "desc": "Google Maps standard street map",
+    "thumbnail": "https://mt1.google.com/vt/lyrs=m&x=0&y=0&z=0",
+    "url": "https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}",
+    "attributions": "Map data &copy; Google"
+  }
+]
