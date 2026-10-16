@@ -17,15 +17,6 @@ APP_DIR="/var/www/VistaBridge"
 PM2_APP_NAME="vistabridge"
 APP_PORT=3007
 
-# Auto-detect folder fallback if default path doesn't exist
-if [ ! -d "$APP_DIR" ]; then
-    if [ -d "/var/www/vistabridge/geovista/urban-vista-development" ]; then
-        APP_DIR="/var/www/vistabridge/geovista/urban-vista-development"
-    elif [ -d "/var/www/geovista/urban-vista-development" ]; then
-        APP_DIR="/var/www/geovista/urban-vista-development"
-    fi
-fi
-
 echo -e "${CYAN}======================================================================"
 echo -e "           VISTABRIDGE AUTOMATED DEPLOYMENT"
 echo -e "======================================================================${NC}"
@@ -83,12 +74,19 @@ echo -e "${GREEN}[OK] Build complete.${NC}"
 echo ""
 echo "[5/5] Restarting PM2 process: $PM2_APP_NAME"
 
+# Check if PM2 is running from the correct APP_DIR. If not, delete it so it rebinds cleanly to /var/www/VistaBridge
+PM2_CURRENT_DIR=$(pm2 jlist 2>/dev/null | grep -o '"pm_cwd":"[^"]*"' | head -n 1 | cut -d'"' -f4)
+if [ -n "$PM2_CURRENT_DIR" ] && [ "$PM2_CURRENT_DIR" != "$APP_DIR" ]; then
+    echo -e "${YELLOW}[INFO] Updating PM2 working directory from '$PM2_CURRENT_DIR' to '$APP_DIR'...${NC}"
+    pm2 delete "$PM2_APP_NAME" 2>/dev/null || true
+fi
+
 if pm2 list | grep -q "$PM2_APP_NAME"; then
     pm2 restart "$PM2_APP_NAME" --update-env
-    echo -e "${GREEN}[OK] PM2 process restarted.${NC}"
+    echo -e "${GREEN}[OK] PM2 process restarted in $APP_DIR.${NC}"
 else
-    echo -e "${YELLOW}[WARN] PM2 process '$PM2_APP_NAME' not found. Starting fresh...${NC}"
-    PORT=$APP_PORT pm2 start "npx next start -p $APP_PORT" --name "$PM2_APP_NAME"
+    echo -e "${YELLOW}[INFO] Starting PM2 process '$PM2_APP_NAME' from $APP_DIR on port $APP_PORT...${NC}"
+    PORT=$APP_PORT pm2 start "npx next start -p $APP_PORT" --name "$PM2_APP_NAME" --cwd "$APP_DIR"
     pm2 save
     echo -e "${GREEN}[OK] PM2 process started on port $APP_PORT.${NC}"
 fi
