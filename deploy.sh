@@ -17,6 +17,15 @@ APP_DIR="/var/www/VistaBridge"
 PM2_APP_NAME="vistabridge"
 APP_PORT=3007
 
+# Auto-detect folder fallback if default path doesn't exist
+if [ ! -d "$APP_DIR" ]; then
+    if [ -d "/var/www/vistabridge/geovista/urban-vista-development" ]; then
+        APP_DIR="/var/www/vistabridge/geovista/urban-vista-development"
+    elif [ -d "/var/www/geovista/urban-vista-development" ]; then
+        APP_DIR="/var/www/geovista/urban-vista-development"
+    fi
+fi
+
 echo -e "${CYAN}======================================================================"
 echo -e "           VISTABRIDGE AUTOMATED DEPLOYMENT"
 echo -e "======================================================================${NC}"
@@ -33,9 +42,13 @@ cd "$APP_DIR" || { echo -e "${RED}[ERROR] Directory $APP_DIR not found!${NC}"; e
 # -------------------------------------------------------------------------
 echo ""
 echo "[2/5] Pulling latest code from GitHub..."
-git fetch origin main
-git reset --hard origin/main
-echo -e "${GREEN}[OK] Code updated.${NC}"
+GIT_REMOTE="origin"
+if ! git remote | grep -q "^origin$"; then
+    GIT_REMOTE=$(git remote | head -n 1)
+fi
+git fetch "$GIT_REMOTE" main
+git reset --hard "$GIT_REMOTE/main"
+echo -e "${GREEN}[OK] Code updated from $GIT_REMOTE/main.${NC}"
 
 # -------------------------------------------------------------------------
 # 3. INSTALL DEPENDENCIES
@@ -60,7 +73,7 @@ echo ""
 echo "[5/5] Restarting PM2 process: $PM2_APP_NAME"
 
 if pm2 list | grep -q "$PM2_APP_NAME"; then
-    pm2 restart "$PM2_APP_NAME"
+    pm2 restart "$PM2_APP_NAME" --update-env
     echo -e "${GREEN}[OK] PM2 process restarted.${NC}"
 else
     echo -e "${YELLOW}[WARN] PM2 process '$PM2_APP_NAME' not found. Starting fresh...${NC}"
