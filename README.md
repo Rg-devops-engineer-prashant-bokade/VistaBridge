@@ -84,6 +84,7 @@ Traditional GIS software often suffers from complex desktop setups, clunky user 
   - **Rich Text Notes & Documentation**: WYSIWYG note cards for context and annotations.
 - **Spatial Extent Synchronization**: Pan or zoom a map widget to dynamically update linked statistical charts.
 
+
 ### 4. Multi-Page PDF & Report Export
 - **Print Layout Sandbox**: Rearrange widgets across designated paper sheets before export.
 - **Standard Page Formats**: Full support for **A4**, **A3**, and **Letter** paper sizes.
