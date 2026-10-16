@@ -100,7 +100,11 @@ export async function GET(
       updated_at: row.updated_at,
     };
 
-    return NextResponse.json(map);
+    return NextResponse.json(map, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      },
+    });
   } catch (err) {
     console.error('Failed to get map workspace:', err);
     return NextResponse.json(

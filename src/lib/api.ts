@@ -1905,6 +1905,7 @@ export async function apiRequest(endpoint: string, options: RequestOptions = {})
   }
 
   let response = await fetch(`${siteConfig.api.baseUrl}${endpoint}`, {
+    cache: 'no-store',
     ...fetchOptions,
     headers,
   });
@@ -1917,6 +1918,7 @@ export async function apiRequest(endpoint: string, options: RequestOptions = {})
     if (newToken) {
       headers.set('Authorization', `Bearer ${newToken}`);
       response = await fetch(`${siteConfig.api.baseUrl}${endpoint}`, {
+        cache: 'no-store',
         ...fetchOptions,
         headers,
       });
