@@ -374,38 +374,77 @@ function Map2DContent() {
 
   // Map view rotation state (in degrees 0-359)
   const [rotationDeg, setRotationDeg] = useState(0);
+  const isSliderRotatingRef = useRef(false);
+  const rotateRafRef = useRef<number | null>(null);
 
-  const handleRotateChange = useCallback((val: number) => {
-    setRotationDeg(val);
-    const view = mapInstance.current?.getView();
-    if (view) {
-      const rad = (val * Math.PI) / 180;
-      view.setRotation(rad);
+  const handleRotateChange = useCallback((val: number | [number, number] | null | undefined) => {
+    try {
+      const rawVal = Array.isArray(val) ? val[0] : val;
+      if (typeof rawVal !== 'number' || isNaN(rawVal) || !isFinite(rawVal)) {
+        return;
+      }
+      const safeDeg = Math.min(360, Math.max(0, Math.round(rawVal)));
+      setRotationDeg(safeDeg);
+
+      isSliderRotatingRef.current = true;
+      if (rotateRafRef.current) {
+        cancelAnimationFrame(rotateRafRef.current);
+      }
+
+      rotateRafRef.current = requestAnimationFrame(() => {
+        try {
+          const view = mapInstance.current?.getView();
+          if (view) {
+            const rad = (safeDeg * Math.PI) / 180;
+            if (isFinite(rad)) {
+              view.setRotation(rad);
+            }
+          }
+        } finally {
+          isSliderRotatingRef.current = false;
+        }
+      });
+    } catch (err) {
+      console.warn('Error applying map rotation:', err);
     }
   }, []);
 
   const handleRotateAnimate = useCallback((targetDeg: number) => {
-    const view = mapInstance.current?.getView();
-    if (view) {
-      const currentRot = view.getRotation() || 0;
-      const currentDeg = (currentRot * 180) / Math.PI;
+    try {
+      if (typeof targetDeg !== 'number' || isNaN(targetDeg) || !isFinite(targetDeg)) {
+        targetDeg = 0;
+      }
+      const view = mapInstance.current?.getView();
+      if (!view) return;
+      const center = view.getCenter();
+      if (!center) return;
 
-      // Find shortest path between angles
+      const currentRot = view.getRotation();
+      const safeRot = typeof currentRot === 'number' && isFinite(currentRot) ? currentRot : 0;
+      const currentDeg = (safeRot * 180) / Math.PI;
+
       let diff = (targetDeg - (currentDeg % 360)) % 360;
       if (diff > 180) diff -= 360;
       if (diff < -180) diff += 360;
 
       const targetRad = ((currentDeg + diff) * Math.PI) / 180;
+      if (!isFinite(targetRad)) return;
+
+      setRotationDeg(((Math.round(targetDeg) % 360) + 360) % 360);
+
       view.animate({
         rotation: targetRad,
-        duration: 400,
+        duration: 350,
         easing: (t) => t * (2 - t),
       });
+    } catch (err) {
+      console.warn('Error animating map rotation:', err);
     }
   }, []);
 
   const handleStepRotate = useCallback((delta: number) => {
-    const next = (((Math.round(rotationDeg) + delta) % 360) + 360) % 360;
+    const current = typeof rotationDeg === 'number' && isFinite(rotationDeg) ? rotationDeg : 0;
+    const next = (((Math.round(current) + delta) % 360) + 360) % 360;
     handleRotateAnimate(next);
   }, [rotationDeg, handleRotateAnimate]);
 
@@ -669,8 +708,29 @@ function Map2DContent() {
       }
       olLayersRef.current = {};
       loadedMapIdRef.current = null;
+      if (typeof window !== 'undefined') {
+        delete (window as any).vismapMapInstance;
+        delete (window as any).vismapLayers;
+      }
     };
   }, []);
+
+  // Explicitly reset layer and map state whenever mapId changes
+  useEffect(() => {
+    setAddedLayers([]);
+    setMapDetail(null);
+    loadedMapIdRef.current = null;
+    if (mapInstance.current) {
+      Object.values(olLayersRef.current).forEach((layer: any) => {
+        try {
+          mapInstance.current?.removeLayer(layer);
+        } catch {
+          // ignore
+        }
+      });
+      olLayersRef.current = {};
+    }
+  }, [mapId]);
 
   const handleCopyLink = () => {
     const link = `${window.location.protocol}//${window.location.host}${window.location.pathname}?id=${mapId}`;
@@ -971,7 +1031,7 @@ function Map2DContent() {
         center: initialCenter,
         zoom: initialZoom,
       }),
-      controls: defaultControls({ zoom: false }),
+      controls: defaultControls({ zoom: false, rotate: false }),
       interactions: defaultInteractions({ doubleClickZoom: false }).extend([doubleClickZoom]),
     });
 
@@ -1211,12 +1271,18 @@ function Map2DContent() {
 
     // Listen to view rotation changes
     const updateRotationFromView = () => {
-      const view = map.getView();
-      if (!view) return;
-      const rot = view.getRotation() || 0;
-      const deg = Math.round((rot * 180) / Math.PI);
-      const normalized = ((deg % 360) + 360) % 360;
-      setRotationDeg((prev) => (prev === normalized ? prev : normalized));
+      if (isSliderRotatingRef.current) return;
+      try {
+        const view = map.getView();
+        if (!view) return;
+        const rot = view.getRotation();
+        if (typeof rot !== 'number' || !isFinite(rot)) return;
+        const deg = Math.round((rot * 180) / Math.PI);
+        const normalized = ((deg % 360) + 360) % 360;
+        setRotationDeg((prev) => (Math.abs(prev - normalized) < 0.5 ? prev : normalized));
+      } catch (err) {
+        console.warn('Error reading rotation from view:', err);
+      }
     };
 
     map.getView().on('change:rotation', updateRotationFromView);
@@ -1839,13 +1905,7 @@ function Map2DContent() {
         }));
       }
 
-      if (layersListState.length > 0) {
-        setAddedLayers(prev => {
-          const existingIds = new Set(prev.map(l => l.id));
-          const filteredNew = layersListState.filter(l => !existingIds.has(l.id));
-          return [...prev, ...filteredNew];
-        });
-      }
+      setAddedLayers(layersListState);
 
       // Restore map center & zoom from saved mapDetail
       if (mapDetail && mapDetail.center_lon != null && mapDetail.center_lat != null && mapDetail.zoom != null) {
@@ -6699,6 +6759,12 @@ function Map2DContent() {
   );
 }
 
+function Map2DWrapper() {
+  const searchParams = useSearchParams();
+  const mapId = searchParams.get('id');
+  return <Map2DContent key={mapId || 'new'} />;
+}
+
 export default function Map2DPage() {
   return (
     <Suspense fallback={
@@ -6706,7 +6772,7 @@ export default function Map2DPage() {
         <Spin size="large" description="Loading 2D Map Workspace..." />
       </div>
     }>
-      <Map2DContent />
+      <Map2DWrapper />
     </Suspense>
   );
 }

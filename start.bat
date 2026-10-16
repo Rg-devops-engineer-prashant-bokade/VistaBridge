@@ -84,10 +84,12 @@ echo [*] Running in production mode [clean errors, high speed]
 echo [*] To connect to a different GeoServer, run setup.bat
 echo ======================================================================
 echo.
-echo Starting server and launching browser...
+echo Starting production server...
+echo [*] The browser will open automatically once the application is ready.
 echo.
 
-start "" cmd /c "ping -n 3 127.0.0.1 >nul & start http://localhost:!APP_PORT!"
+REM Silently poll local port in background and open default browser when ready (no blank terminal window)
+start "" /B node -e "const net = require('net'); const { exec } = require('child_process'); const port = parseInt(process.argv[1] || '3000'); let tries = 0; const check = () => { if (tries++ > 60) return; const sock = net.createConnection({ port, host: '127.0.0.1' }, () => { sock.destroy(); exec('start http://localhost:' + port); }); sock.on('error', () => setTimeout(check, 500)); }; setTimeout(check, 800);" !APP_PORT!
 
 call npx next start -p !APP_PORT!
 if %ERRORLEVEL% NEQ 0 (

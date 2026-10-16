@@ -137,7 +137,8 @@ export default function NewMapPage() {
       setFormOpen(false);
 
       // Redirect to the created workspace view: e.g. /map/2d?id=uuid
-      router.push(`${selectedTemplate?.link || '/map/2d'}?id=${mapData.id}`);
+      // Using window.location.href ensures a fresh lifecycle without stale map/layer state across browsers
+      window.location.href = `${selectedTemplate?.link || '/map/2d'}?id=${mapData.id}`;
     } catch (err: unknown) {
       notification.error({
         message: 'Error',

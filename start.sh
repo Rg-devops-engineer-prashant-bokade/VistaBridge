@@ -116,7 +116,13 @@ echo "[*] Note: To connect to a different GeoServer, run ./setup.sh"
 echo "======================================================================"
 echo ""
 echo "Starting production server on port $APP_PORT..."
+echo "[*] The browser will open automatically once the application is ready."
 echo ""
+
+# Silently poll local port in background and open default browser when ready
+(
+  node -e "const net = require('net'); const { exec } = require('child_process'); const port = parseInt(process.argv[1] || '3000'); let tries = 0; const check = () => { if (tries++ > 60) return; const sock = net.createConnection({ port, host: '127.0.0.1' }, () => { sock.destroy(); const cmd = process.platform === 'darwin' ? 'open' : 'xdg-open'; exec(cmd + ' http://localhost:' + port); }); sock.on('error', () => setTimeout(check, 500)); }; setTimeout(check, 800);" "$APP_PORT"
+) >/dev/null 2>&1 &
 
 # Launch Next.js on the configured port
 npx next start -p "$APP_PORT"

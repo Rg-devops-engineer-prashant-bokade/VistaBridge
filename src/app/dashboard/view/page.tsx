@@ -17,7 +17,7 @@
 import React, { useState, useEffect, Suspense, useRef, useCallback, useMemo } from 'react';
 import { Typography, Spin, Button, Divider, Tag, Tooltip, Modal, Input, App, Form, Select, Popover } from 'antd';
 import {
-  Plus, Minus, Maximize, ArrowLeft, Share2, Save, Edit2, FileText, Calendar,
+  Plus, Minus, Maximize, ArrowLeft, Save, Edit2, FileText, Calendar,
   Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, Trash2,
   BarChart3, PieChart, LineChart, Table, Hash, Map, X, Paintbrush, Info, ImageIcon,
   Printer, Eye, Donut, ScatterChart, TrendingUp, Lock, Unlock, Palette,
@@ -1763,17 +1763,6 @@ function ViewDashboardContent() {
 
         {/* Right Section: actions — compacted on mobile */}
         <div className="flex items-center gap-0.5 md:gap-2 shrink-0">
-          {/* Share */}
-          <Tooltip title="Share Dashboard">
-            <Button
-              type="text"
-              icon={<Share2 size={16} className="text-gray-500 hover:text-primary transition-colors" />}
-              onClick={() => setIsShareModalOpen(true)}
-              className="flex items-center justify-center hover:bg-gray-50 rounded-xl"
-              style={{ width: 34, height: 34 }}
-            />
-          </Tooltip>
-
           {/* Save — hidden when editing print layout */}
           {!isEditingPrintLayout && (
             <Tooltip title="Save Changes">
@@ -2140,7 +2129,7 @@ function ViewDashboardContent() {
                             <div className="flex items-center gap-2 min-w-[200px]">
                               <img src="/vblogo.png" alt="Logo" className="h-5 w-auto object-contain" />
                               <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">
-                                Rotten Grapes Private Limited
+                                VistaBridge
                               </span>
                             </div>
 
