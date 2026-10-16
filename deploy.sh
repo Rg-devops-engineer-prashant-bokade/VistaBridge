@@ -32,10 +32,21 @@ echo -e "======================================================================$
 echo ""
 
 # -------------------------------------------------------------------------
-# 1. NAVIGATE TO APP DIRECTORY
+# 1. NAVIGATE TO APP DIRECTORY & BACKUP SQLITE DATABASE
 # -------------------------------------------------------------------------
 echo "[1/5] Navigating to app directory: $APP_DIR"
 cd "$APP_DIR" || { echo -e "${RED}[ERROR] Directory $APP_DIR not found!${NC}"; exit 1; }
+
+# Automatic SQLite Backup before any changes (Zero Data Loss Protection)
+if [ -d "$APP_DIR/data" ]; then
+    BACKUP_DIR="/var/backups/vistabridge"
+    mkdir -p "$BACKUP_DIR"
+    BACKUP_FILE="$BACKUP_DIR/data_backup_$(date +%Y%m%d_%H%M%S).tar.gz"
+    tar -czf "$BACKUP_FILE" -C "$APP_DIR" data 2>/dev/null || true
+    echo -e "${GREEN}[OK] SQLite database backup created: $BACKUP_FILE${NC}"
+    # Keep only the latest 15 backups to save disk space
+    ls -dt "$BACKUP_DIR"/data_backup_*.tar.gz 2>/dev/null | tail -n +16 | xargs rm -f 2>/dev/null || true
+fi
 
 # -------------------------------------------------------------------------
 # 2. PULL LATEST CODE
